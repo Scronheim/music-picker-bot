@@ -21,6 +21,7 @@ exports.getRandomAlbumByStyle = async (searchStyle) => {
     const secondResponse = await startSecondRequest(randomPage)
     const album = secondResponse.results[0]
     const imagePath = await downloadImage(album.cover_image)
+
     return {
         title: album.title,
         style: album.style.join(', '),
