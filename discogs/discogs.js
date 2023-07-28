@@ -14,15 +14,34 @@ exports.startDiscogs = () => {
     db = dis.database()
 }
 
+exports.getArtistInfo = async (artist) => {
+    return await db.getArtist(artist)
+}
+
+exports.searchReleasesByArtist = async (artist) => {
+    return await db.search({artist, type: 'master', format: 'album'})
+}
+
+exports.getReleasesByArtistId = async (artistId) => {
+    return await db.getArtistReleases(artistId)
+}
+
 exports.getReleaseById = async (releaseId) => {
     const release = await db.getMaster(releaseId)
     const imagePath = await downloadImage(release.images[0].uri)
     return {
-        title: release.title.replace('<', '').replace('>', '').replace('&', ''),
+        title: sanitizeTitle(release.title),
         style: release.styles.join(', '),
         year: release.year,
         tracklist: release.tracklist,
         imagePath,
+        artistName: release.artists[0].name,
+        videos: release.videos?.map((video) => {
+            return {
+                title: video.title,
+                uri: video.uri,
+            }
+        }),
     }
 }
 
@@ -36,7 +55,7 @@ exports.getRandomAlbumByStyle = async (searchStyle) => {
     const imagePath = await downloadImage(album.cover_image)
 
     return {
-        title: album.title.replace('<', '').replace('>', '').replace('&', ''),
+        title: sanitizeTitle(album.title),
         style: album.style.join(', '),
         year: album.year,
         country: album.country,
@@ -83,4 +102,8 @@ const downloadImage = async (url) => {
                     .on('error', e => reject(e));
             }),
     );
+}
+
+function sanitizeTitle(title) {
+    return title.replace('<', '').replace('>', '').replace('&', '')
 }

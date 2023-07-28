@@ -1,6 +1,6 @@
 const { Telegraf } = require('telegraf')
 
-const { callbackQuery, searchByArtist} = require('./callbackQuery')
+const { callbackQuery, searchReleasesByArtist} = require('./callbackQuery')
 
 const { start } = require('./commands/start')
 const { aboutMe } = require('./commands/aboutMe')
@@ -27,7 +27,7 @@ const startBot = async () => {
     //======= COMMANDS =======
     bot.command('start', start)
     bot.command('about', aboutMe)
-    bot.on('text', searchByArtist)
+    bot.on('text', searchReleasesByArtist)
     //======= /COMMANDS =======
 
     // bot.on('text', start)

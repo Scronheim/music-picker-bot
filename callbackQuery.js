@@ -1,11 +1,9 @@
 const fs = require('fs')
-const { Keyboard, Key } = require('telegram-keyboard')
-const _ = require('lodash')
 
-const { getRandomAlbumByStyle, getDiscogsDb, getReleaseById} = require('./discogs/discogs')
+const { getRandomAlbumByStyle, getReleaseById, searchReleasesByArtist, getReleasesByArtistId, getArtistInfo} = require('./discogs/discogs')
 const { start } = require('./commands/start')
 const { genresKeyboard, countryFlagsMapper } = require('./utils/const')
-const { sortAlbumsByYear, formatResponseText, formatReleaseText} = require('./utils/helpers')
+const { sortAlbumsByYear, formatResponseText, formatReleaseText, replyWithListOfReleases, formatVideoList} = require('./utils/helpers')
 
 exports.callbackQuery = async (ctx) => {
     const data = JSON.parse(ctx.update.callback_query.data)
@@ -38,18 +36,21 @@ exports.callbackQuery = async (ctx) => {
         })
     } else if (data.action === 'searchByArtist') {
         await ctx.reply('Введите название группы')
+    } else if (data.action === 'searchByArtistName') {
+        await this.searchReleasesByArtist(ctx, data.artistName)
     } else if (data.action === 'searchByReleaseId') {
-        this.searchReleaseById(ctx, data.releaseId)
+        await searchReleaseById(ctx, data.releaseId)
+    } else if (data.action === 'replyWithVideo') {
+        await searchVideoByReleaseId(ctx, data.releaseId)
     } else {
         await start(ctx)
     }
     await ctx.answerCbQuery()
 }
 
-exports.searchByArtist = async (ctx) => {
-    const artist = ctx.update.message.text
-    const db = getDiscogsDb()
-    const response = await db.search({artist, type: 'master', format: 'album'})
+exports.searchReleasesByArtist = async (ctx, artistName) => {
+    const artist = ctx?.update?.message?.text || artistName
+    const response = await searchReleasesByArtist(artist)
     if (response.results.length) {
         let albums = sortAlbumsByYear(response.results)
         albums = albums.map(album => {
@@ -62,30 +63,49 @@ exports.searchByArtist = async (ctx) => {
                 uri: album.uri,
             }
         })
-        replyWithListOfReleases(ctx, albums)
+        await replyWithListOfReleases(ctx, albums)
     } else {
         ctx.reply('По Вашему запросу ничего не найдно')
     }
 }
-exports.searchReleaseById = async (ctx, releaseId) => {
+
+async function searchVideoByReleaseId(ctx, releaseId) {
     const release = await getReleaseById(releaseId)
-    const caption = formatReleaseText(release)
-    await ctx.replyWithPhoto({source: release.imagePath}, {caption, parse_mode: 'HTML'})
-    fs.unlinkSync(release.imagePath)
+    const keyboard = [
+        [
+            {
+                text: '⬅️ Все альбомы',
+                callback_data: JSON.stringify({action: 'searchByArtistName', artistName: release.artistName}),
+            },
+        ]
+    ]
+    const videos = formatVideoList(release)
+    await ctx.reply(videos, {parse_mode: 'HTML', reply_markup: {
+            resize_keyboard: true,
+            inline_keyboard: keyboard,
+        }})
 }
 
-function replyWithListOfReleases(ctx, releases) {
-    const preparedReleases = releases.map((release) => {
-        release.title = release.title.split(' - ')[1]
-        return Key.callback(`${release.title} (${release.year})`, JSON.stringify({action: 'searchByReleaseId', releaseId: release.id}))
-    })
-    const chunk = _.chunk(preparedReleases, 2)
-    const keyboard = Keyboard.make(chunk).resize(false).inline()
-    return ctx.replyWithHTML('Показаны альбомы с типом <b>master</b>, формата <b>album</b>\n', keyboard)
-//     return ctx.replyWithHTML(`
-//     Показаны альбомы с типом <b>master</b>, формата <b>album</b>\n
-// ${releases.map((album, index) => {
-//         return `${index + 1}. <b><a href="https://discogs.com${album.uri}">${album.title} (${album.year})</a></b> (${album.style}/${album.country})\n`
-//     }).join('')}
-// `, {disable_web_page_preview: true})
+async function searchReleaseById(ctx, releaseId) {
+    const release = await getReleaseById(releaseId)
+    const caption = formatReleaseText(release)
+    const keyboard = [
+        [
+            {
+                text: '⬅️ Все альбомы',
+                callback_data: JSON.stringify({action: 'searchByArtistName', artistName: release.artistName}),
+            },
+        ]
+    ]
+    if (release.videos) {
+        keyboard[0].push({
+            text: '🎬 Видео',
+            callback_data: JSON.stringify({action: 'replyWithVideo', releaseId}),
+        })
+    }
+    await ctx.replyWithPhoto({source: release.imagePath}, {caption, parse_mode: 'HTML', reply_markup: {
+            resize_keyboard: true,
+            inline_keyboard: keyboard,
+        }})
+    fs.unlinkSync(release.imagePath)
 }
