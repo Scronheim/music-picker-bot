@@ -1,9 +1,11 @@
 const fs = require('fs')
+const { Keyboard, Key } = require('telegram-keyboard')
+const _ = require('lodash')
 
-const { getRandomAlbumByStyle, getDiscogsDb } = require('./discogs/discogs')
+const { getRandomAlbumByStyle, getDiscogsDb, getReleaseById} = require('./discogs/discogs')
 const { start } = require('./commands/start')
 const { genresKeyboard, countryFlagsMapper } = require('./utils/const')
-const { sortAlbumsByYear, formatResponseText } = require('./utils/helpers')
+const { sortAlbumsByYear, formatResponseText, formatReleaseText} = require('./utils/helpers')
 
 exports.callbackQuery = async (ctx) => {
     const data = JSON.parse(ctx.update.callback_query.data)
@@ -22,7 +24,7 @@ exports.callbackQuery = async (ctx) => {
                 },
             ]
         ]
-        await ctx.replyWithPhoto({source: album.imagePath}, {caption, reply_markup: {
+        await ctx.replyWithPhoto({source: album.imagePath}, {caption, parse_mode: 'HTML', reply_markup: {
                 resize_keyboard: true,
                 inline_keyboard: keyboard,
             }})
@@ -36,6 +38,8 @@ exports.callbackQuery = async (ctx) => {
         })
     } else if (data.action === 'searchByArtist') {
         await ctx.reply('Введите название группы')
+    } else if (data.action === 'searchByReleaseId') {
+        this.searchReleaseById(ctx, data.releaseId)
     } else {
         await start(ctx)
     }
@@ -50,7 +54,8 @@ exports.searchByArtist = async (ctx) => {
         let albums = sortAlbumsByYear(response.results)
         albums = albums.map(album => {
             return {
-                title: album.title.replace('<', '').replace('>', ''),
+                id: album.id,
+                title: album.title,
                 year: album.year,
                 country: countryFlagsMapper[album.country],
                 style: album.style.join(', '),
@@ -62,12 +67,25 @@ exports.searchByArtist = async (ctx) => {
         ctx.reply('По Вашему запросу ничего не найдно')
     }
 }
+exports.searchReleaseById = async (ctx, releaseId) => {
+    const release = await getReleaseById(releaseId)
+    const caption = formatReleaseText(release)
+    await ctx.replyWithPhoto({source: release.imagePath}, {caption, parse_mode: 'HTML'})
+    fs.unlinkSync(release.imagePath)
+}
 
 function replyWithListOfReleases(ctx, releases) {
-    return ctx.replyWithHTML(`
-    Показаны альбомы с типом <b>master</b>, формата <b>album</b>\n
-${releases.map((album, index) => {
-        return `${index + 1}. <b><a href="https://discogs.com${album.uri}">${album.title} (${album.year})</a></b> (${album.style}/${album.country})\n`
-    }).join('')}
-`, {disable_web_page_preview: true})
+    const preparedReleases = releases.map((release) => {
+        release.title = release.title.split(' - ')[1]
+        return Key.callback(`${release.title} (${release.year})`, JSON.stringify({action: 'searchByReleaseId', releaseId: release.id}))
+    })
+    const chunk = _.chunk(preparedReleases, 2)
+    const keyboard = Keyboard.make(chunk).resize(false).inline()
+    return ctx.replyWithHTML('Показаны альбомы с типом <b>master</b>, формата <b>album</b>\n', keyboard)
+//     return ctx.replyWithHTML(`
+//     Показаны альбомы с типом <b>master</b>, формата <b>album</b>\n
+// ${releases.map((album, index) => {
+//         return `${index + 1}. <b><a href="https://discogs.com${album.uri}">${album.title} (${album.year})</a></b> (${album.style}/${album.country})\n`
+//     }).join('')}
+// `, {disable_web_page_preview: true})
 }

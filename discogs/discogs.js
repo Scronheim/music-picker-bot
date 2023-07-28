@@ -10,9 +10,22 @@ exports.getDiscogsDb = () => {
 }
 
 exports.startDiscogs = () => {
-    const dis = new Discogs({userToken: 'zHMGlQoaDZgdPEMxhiBlUVjVsKrGBIRYRojAhbCa'});
+    const dis = new Discogs({userToken: process.env.DISCOGS_TOKEN});
     db = dis.database()
 }
+
+exports.getReleaseById = async (releaseId) => {
+    const release = await db.getMaster(releaseId)
+    const imagePath = await downloadImage(release.images[0].uri)
+    return {
+        title: release.title.replace('<', '').replace('>', '').replace('&', ''),
+        style: release.styles.join(', '),
+        year: release.year,
+        tracklist: release.tracklist,
+        imagePath,
+    }
+}
+
 exports.getRandomAlbumByStyle = async (searchStyle) => {
     style = searchStyle
     const firstResponse = await startFirstRequest()
@@ -23,7 +36,7 @@ exports.getRandomAlbumByStyle = async (searchStyle) => {
     const imagePath = await downloadImage(album.cover_image)
 
     return {
-        title: album.title,
+        title: album.title.replace('<', '').replace('>', '').replace('&', ''),
         style: album.style.join(', '),
         year: album.year,
         country: album.country,
