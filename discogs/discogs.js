@@ -52,6 +52,7 @@ exports.getRandomAlbumByStyle = async (searchStyle) => {
     const randomPage = getRandomInt(1, releaseCount)
     const secondResponse = await startSecondRequest(randomPage)
     const album = secondResponse.results[0]
+    console.log(album)
     const imagePath = await downloadImage(album.cover_image)
 
     return {
@@ -92,6 +93,9 @@ const downloadImage = async (url) => {
     return axios({
         url,
         responseType: 'stream',
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.975 YaBrowser/23.11.3.975 Yowser/2.5 Safari/537.36'
+        }
     }).then(
         response =>
             new Promise((resolve, reject) => {
